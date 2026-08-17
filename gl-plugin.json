@@ -54,6 +54,8 @@
       "gl-sdk4-ui-core",
       "curl",
       "gl-oui-rpc",
+      "ubus",
+      "jsonfilter",
       "uci"
     ],
     "conffiles": [

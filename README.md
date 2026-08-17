@@ -56,14 +56,17 @@ The generated OpenWrt package is written to `dist/`. Install it with
 `npm run router:install` after configuring the router connection used by the
 SDK CLI.
 
-The full-stack package depends on OpenWrt's `curl`, `gl-oui-rpc`, and `uci`
-packages. Its only router-side executable is `/www/cgi-bin/gl-starlink-monitor`,
-a fixed read-only proxy for the three protobuf requests used by the UI.
+The full-stack package depends on OpenWrt's `curl`, `gl-oui-rpc`, `ubus`,
+`jsonfilter`, and `uci` packages. Its router-side CGI is a fixed read-only proxy
+for the three protobuf requests used by the UI.
 
 ## Safety boundary
 
 The proxy accepts only `status`, `history`, and `obstruction`. It does not accept
 a target URL, request bytes, Starlink account credentials, or write commands.
+Every request carries the current admin SID through the SDK 0.8 browser helper;
+the packaged shell helper validates it with `gl-session` and requires the root
+ACL group before reading the action or Dish address.
 The endpoint setting is changed through an authenticated GL.iNet RPC module,
 accepts only a validated unicast IPv4 address, and keeps the protocol, port, and
 RPC path fixed. The CGI validates the stored address again before every request.

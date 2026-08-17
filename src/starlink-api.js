@@ -6,6 +6,7 @@ const {
   toJson,
 } = require('@bufbuild/protobuf');
 const { FileDescriptorSetSchema } = require('@bufbuild/protobuf/wkt');
+const { createAdminSessionHeaders } = require('@gl-sdk4-plugin-kit/admin-session');
 const { parseGrpcWebResponse } = require('./grpc-web');
 const protosetModule = require('./dish.protoset');
 
@@ -45,7 +46,9 @@ async function request(action, signal) {
     credentials: 'same-origin',
     cache: 'no-store',
     signal,
-    headers: { Accept: 'application/grpc-web+proto' },
+    headers: createAdminSessionHeaders(window, {
+      Accept: 'application/grpc-web+proto',
+    }),
   });
   if (!response.ok) {
     let detail = '';

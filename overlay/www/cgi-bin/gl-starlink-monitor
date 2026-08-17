@@ -10,6 +10,9 @@ if [ "${REQUEST_METHOD:-GET}" != "GET" ]; then
   exit 0
 fi
 
+. /usr/libexec/starlink-monitor/admin-session.sh
+gl_sdk4_require_admin_session
+
 case "${QUERY_STRING:-}" in
   action=status)
     request='\000\000\000\000\003\342\076\000'
@@ -24,7 +27,10 @@ case "${QUERY_STRING:-}" in
     timeout=8
     ;;
   *)
-    printf '%s\r\n\r\n' 'Status: 400 Bad Request' 'Content-Type: application/json'
+    printf '%s\r\n' 'Status: 400 Bad Request'
+    printf '%s\r\n' 'Content-Type: application/json'
+    printf '%s\r\n' 'Cache-Control: no-store'
+    printf '%s\r\n\r\n' 'X-Content-Type-Options: nosniff'
     printf '%s\n' '{"error":"unknown_action"}'
     exit 0
     ;;
@@ -73,10 +79,13 @@ if printf '%b' "$request" | /usr/bin/curl \
   --output "$response_path" \
   "http://${dish_address}:9201/SpaceX.API.Device.Device/Handle" 2>/dev/null; then
   printf '%s\r\n' 'Content-Type: application/grpc-web+proto'
-  printf '%s\r\n\r\n' 'Cache-Control: no-store'
+  printf '%s\r\n' 'Cache-Control: no-store'
+  printf '%s\r\n\r\n' 'X-Content-Type-Options: nosniff'
   cat "$response_path"
 else
   printf '%s\r\n' 'Status: 502 Bad Gateway'
-  printf '%s\r\n\r\n' 'Content-Type: application/json' 'Cache-Control: no-store'
+  printf '%s\r\n' 'Content-Type: application/json'
+  printf '%s\r\n' 'Cache-Control: no-store'
+  printf '%s\r\n\r\n' 'X-Content-Type-Options: nosniff'
   printf '%s\n' '{"error":"dish_unreachable"}'
 fi
