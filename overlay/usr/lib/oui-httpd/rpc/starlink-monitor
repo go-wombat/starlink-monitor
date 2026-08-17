@@ -1,0 +1,105 @@
+--[[
+    @object-name: starlink-monitor
+    @object-desc: Starlink Monitor settings
+--]]
+
+local uci = require "uci"
+
+local M = {}
+local DEFAULT_ADDRESS = "192.168.100.1"
+local DISH_PORT = 9201
+
+local function valid_ipv4(address)
+    if type(address) ~= "string" or not address:match("^%d+%.%d+%.%d+%.%d+$") then
+        return false
+    end
+
+    local octets = {}
+    for part in address:gmatch("[^.]+") do
+        if not part:match("^%d+$") or #part > 3 or (#part > 1 and part:sub(1, 1) == "0") then
+            return false
+        end
+        local value = tonumber(part)
+        if value == nil or value > 255 then return false end
+        octets[#octets + 1] = value
+    end
+
+    if #octets ~= 4 then return false end
+    if octets[1] == 0 or octets[1] == 127 or octets[1] >= 224 then return false end
+    if octets[1] == 255 and octets[2] == 255 and octets[3] == 255 and octets[4] == 255 then
+        return false
+    end
+    return true
+end
+
+local function configured_address()
+    local cursor = uci.cursor()
+    local address = cursor:get("starlink-monitor", "main", "address")
+    if not valid_ipv4(address) then return DEFAULT_ADDRESS end
+    return address
+end
+
+local function response(address)
+    return {
+        address = address,
+        default_address = DEFAULT_ADDRESS,
+        port = DISH_PORT,
+    }
+end
+
+--[[
+    @method-type: call
+    @method-name: get_config
+    @method-desc: Read the configured local Starlink dish address
+--]]
+function M.get_config()
+    return response(configured_address())
+end
+
+--[[
+    @method-type: call
+    @method-name: set_config
+    @method-desc: Save a validated IPv4 address for the local Starlink dish
+--]]
+function M.set_config(params)
+    local address = params and params.address
+    if not valid_ipv4(address) then
+        return { err_code = 1, err_msg = "invalid_ipv4_address" }
+    end
+
+    local cursor = uci.cursor()
+    cursor:set("starlink-monitor", "main", "settings")
+    cursor:set("starlink-monitor", "main", "address", address)
+    cursor:commit("starlink-monitor")
+    return response(address)
+end
+
+--[[
+    @method-type: call
+    @method-name: test_config
+    @method-desc: Test a validated Starlink IPv4 address with one fixed status request
+--]]
+function M.test_config(params)
+    local address = params and params.address
+    if not valid_ipv4(address) then
+        return { err_code = 1, err_msg = "invalid_ipv4_address" }
+    end
+
+    local command = string.format(
+        "printf '\\000\\000\\000\\000\\003\\342\\076\\000' | " ..
+        "/usr/bin/curl --silent --fail --max-time 5 " ..
+        "--header 'Content-Type: application/grpc-web+proto' " ..
+        "--header 'X-Grpc-Web: 1' --data-binary '@-' --output /dev/null " ..
+        "'http://%s:%d/SpaceX.API.Device.Device/Handle' 2>/dev/null",
+        address,
+        DISH_PORT
+    )
+    local result = os.execute(command)
+    local reachable = result == true or result == 0
+    local data = response(address)
+    data.reachable = reachable
+    if not reachable then data.err_msg = "dish_unreachable" end
+    return data
+end
+
+return M

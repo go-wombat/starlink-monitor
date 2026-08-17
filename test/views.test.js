@@ -46,7 +46,13 @@ test('tools view is manual and visible pages tear down all polling', function() 
   assert.match(tools, /mounted\(\)[\s\S]*visibilitychange/);
   assert.doesNotMatch(mountedBlock, /startSpeedTest\(/);
   assert.doesNotMatch(mountedBlock, /runDiagnostics\(/);
+  assert.match(mountedBlock, /loadEndpointConfig\(\)/);
   assert.match(tools, /beforeDestroy\(\)[\s\S]*cancelSpeedTest\(\)/);
+  assert.match(tools, /gl-sdk4-plugin-kit\/lib\/safe-rpc-mixin/);
+  assert.match(tools, /title="Dish endpoint"/);
+  assert.match(tools, /safeRpc\('starlink-monitor', 'set_config'/);
+  assert.match(tools, /safeRpc\('starlink-monitor', 'test_config'/);
+  assert.doesNotMatch(tools, /\$axios|fetch\([^)]*(?:set_config|test_config)/);
   assert.match(network, /const NETWORK_INTERVAL_MS = 5000;/);
   assert.match(network, /routerCall\('clients', 'get_list'\)/);
   assert.doesNotMatch(network, /setInfo|removeOffline|cleanTraffic/);

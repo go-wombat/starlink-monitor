@@ -1,0 +1,2 @@
+config settings 'main'
+	option address '192.168.100.1'

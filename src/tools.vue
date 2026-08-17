@@ -94,10 +94,86 @@
       </gl-card>
     </div>
 
+    <gl-card class="gl-sdk4-card endpoint-card">
+      <starlink-panel-header
+        title="Dish endpoint"
+        subtitle="Local IPv4 address used by the authenticated router proxy"
+        :badge="endpointAddress + ':' + endpointPort"
+        badge-tone="info"
+      />
+
+      <div class="endpoint-form">
+        <label class="endpoint-field">
+          <span>Dish IP address</span>
+          <input
+            v-model.trim="endpointDraft"
+            type="text"
+            inputmode="decimal"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="192.168.100.1"
+            :disabled="endpointBusy"
+            :aria-invalid="endpointDraft.length > 0 && !endpointValid"
+            @keydown.enter.prevent="saveEndpoint"
+          />
+        </label>
+        <div class="endpoint-port" aria-label="Fixed Starlink API port">
+          <span>Port</span>
+          <strong>{{ endpointPort }}</strong>
+          <small>Fixed</small>
+        </div>
+        <div class="endpoint-security">
+          <strong>Admin-only setting</strong>
+          <span>Only a validated IPv4 address is stored. The path, protocol and port cannot be changed.</span>
+        </div>
+      </div>
+
+      <div class="action-row endpoint-actions">
+        <gl-button
+          type="primary"
+          :loading="endpointSaving"
+          :disabled="endpointBusy || !endpointValid || !endpointDirty"
+          @click="saveEndpoint"
+        >
+          Save
+        </gl-button>
+        <gl-button
+          type="default"
+          :loading="endpointTesting"
+          :disabled="endpointBusy || !endpointValid"
+          @click="testEndpoint"
+        >
+          Test connection
+        </gl-button>
+        <gl-button
+          type="default"
+          :disabled="endpointBusy || (!endpointDirty && endpointAddress === endpointDefault)"
+          @click="resetEndpoint"
+        >
+          Reset to default
+        </gl-button>
+        <span
+          v-if="endpointMessage"
+          class="endpoint-message"
+          :class="'is-' + endpointMessageTone"
+          aria-live="polite"
+        >
+          {{ endpointMessage }}
+        </span>
+      </div>
+    </gl-card>
+
   </div>
 </template>
 
 <script>
+const safeRpcMixin = require('gl-sdk4-plugin-kit/lib/safe-rpc-mixin');
+const {
+  DEFAULT_DISH_ADDRESS,
+  DISH_PORT,
+  isValidDishAddress,
+} = require('./endpoint-config');
+const pluginPackage = require('../package.json');
 const starlinkApi = require('./starlink-api');
 const { decodeHistoryWindow } = require('./history');
 const { runSpeedTest } = require('./speed-test');
@@ -112,8 +188,18 @@ function elapsedMilliseconds(startedAt) {
 export default {
   name: 'starlink-tools',
   components: { StarlinkPageHeader, StarlinkPanelHeader },
+  mixins: [safeRpcMixin],
   data() {
     return {
+      endpointAddress: DEFAULT_DISH_ADDRESS,
+      endpointDraft: DEFAULT_DISH_ADDRESS,
+      endpointDefault: DEFAULT_DISH_ADDRESS,
+      endpointPort: DISH_PORT,
+      endpointLoading: false,
+      endpointSaving: false,
+      endpointTesting: false,
+      endpointMessage: '',
+      endpointMessageTone: 'neutral',
       speedResult: {
         phase: 'idle',
         downloadMbps: null,
@@ -171,6 +257,15 @@ export default {
     speedRunning() {
       return ['download', 'upload'].includes(this.speedPhase);
     },
+    endpointBusy() {
+      return this.endpointLoading || this.endpointSaving || this.endpointTesting;
+    },
+    endpointValid() {
+      return isValidDishAddress(this.endpointDraft);
+    },
+    endpointDirty() {
+      return this.endpointDraft !== this.endpointAddress;
+    },
     speedLatency() {
       return this.speedLatencyValue === null ? '--' : formatNumber(this.speedLatencyValue, 0);
     },
@@ -200,6 +295,7 @@ export default {
   },
   mounted() {
     document.addEventListener('visibilitychange', this.handleVisibilityChange);
+    this.loadEndpointConfig();
   },
   beforeDestroy() {
     document.removeEventListener('visibilitychange', this.handleVisibilityChange);
@@ -213,6 +309,70 @@ export default {
     },
     speedValue(value) {
       return Number.isFinite(Number(value)) ? formatNumber(value, 1) : '--';
+    },
+    async loadEndpointConfig() {
+      this.endpointLoading = true;
+      const result = await this.safeRpc('starlink-monitor', 'get_config', {});
+      if (result && isValidDishAddress(result.address)) {
+        this.endpointAddress = result.address;
+        this.endpointDraft = result.address;
+        this.endpointDefault = isValidDishAddress(result.default_address)
+          ? result.default_address
+          : DEFAULT_DISH_ADDRESS;
+        this.endpointPort = Number(result.port) || DISH_PORT;
+      } else {
+        this.endpointMessage = 'Could not read the router setting';
+        this.endpointMessageTone = 'error';
+      }
+      this.endpointLoading = false;
+    },
+    async saveEndpoint() {
+      if (this.endpointBusy || !this.endpointValid || !this.endpointDirty) return;
+      this.endpointSaving = true;
+      this.endpointMessage = '';
+      const result = await this.safeRpc('starlink-monitor', 'set_config', {
+        address: this.endpointDraft,
+      });
+      if (result && !result.err_code && isValidDishAddress(result.address)) {
+        this.endpointAddress = result.address;
+        this.endpointDraft = result.address;
+        this.endpointMessage = `Saved ${result.address}:${Number(result.port) || DISH_PORT}`;
+        this.endpointMessageTone = 'success';
+      } else {
+        this.endpointMessage = result && result.err_msg === 'invalid_ipv4_address'
+          ? 'Enter a valid unicast IPv4 address'
+          : 'Could not save the router setting';
+        this.endpointMessageTone = 'error';
+      }
+      this.endpointSaving = false;
+    },
+    async testEndpoint() {
+      if (this.endpointBusy || !this.endpointValid) return;
+      this.endpointTesting = true;
+      this.endpointMessage = '';
+      const result = await this.safeRpc('starlink-monitor', 'test_config', {
+        address: this.endpointDraft,
+      });
+      if (result && result.reachable) {
+        this.endpointMessage = `Dish responded at ${result.address}:${Number(result.port) || DISH_PORT}`;
+        this.endpointMessageTone = 'success';
+      } else {
+        this.endpointMessage = result && result.err_msg === 'invalid_ipv4_address'
+          ? 'Enter a valid unicast IPv4 address'
+          : `No Starlink response from ${this.endpointDraft}:${DISH_PORT}`;
+        this.endpointMessageTone = 'error';
+      }
+      this.endpointTesting = false;
+    },
+    async resetEndpoint() {
+      if (this.endpointBusy) return;
+      this.endpointDraft = this.endpointDefault;
+      if (!this.endpointDirty) {
+        this.endpointMessage = 'Default address is already active';
+        this.endpointMessageTone = 'neutral';
+        return;
+      }
+      await this.saveEndpoint();
     },
     async readLatency(signal) {
       const controller = new AbortController();
@@ -327,7 +487,7 @@ export default {
       this.diagnostics = rows;
       this.diagnosticPayload = {
         generatedAt: new Date().toISOString(),
-        pluginVersion: '1.2.8',
+        pluginVersion: pluginPackage.version,
         endpoints: rows,
         terminal: statusResult.ok ? {
           hardwareVersion: status.deviceInfo && status.deviceInfo.hardwareVersion || null,
@@ -400,8 +560,29 @@ export default {
 .diagnostic-empty p { margin: 4px 0 0; font-size: 11px; }
 .diagnostics-actions { margin-top: 14px; }
 .copy-state { color: var(--success-color, #20b26b); font-size: 11px; }
+.endpoint-card { margin-bottom: 16px; }
+.endpoint-form { display: grid; grid-template-columns: minmax(240px, 1fr) 120px minmax(280px, 1.4fr); gap: 14px; align-items: end; }
+.endpoint-field { display: flex; min-width: 0; flex-direction: column; gap: 7px; }
+.endpoint-field > span, .endpoint-port > span { color: var(--hint-color, var(--text-weak)); font-size: 10px; font-weight: 650; letter-spacing: .05em; text-transform: uppercase; }
+.endpoint-field input { box-sizing: border-box; width: 100%; height: 42px; padding: 0 13px; border: 1px solid var(--card-border, var(--border)); border-radius: 8px; outline: none; background: var(--body-background, rgba(127,127,127,.03)); color: var(--text-color, var(--text)); font: 600 13px/1 monospace; }
+.endpoint-field input:focus { border-color: var(--primary-color, #1785ff); box-shadow: 0 0 0 2px rgba(23,133,255,.12); }
+.endpoint-field input[aria-invalid="true"] { border-color: var(--error-color, #e35d6a); }
+.endpoint-field input:disabled { cursor: not-allowed; opacity: .6; }
+.endpoint-port { display: grid; box-sizing: border-box; height: 68px; grid-template-columns: 1fr auto; align-content: center; gap: 5px 8px; padding: 10px 13px; border: 1px solid var(--card-border, var(--border)); border-radius: 8px; background: var(--body-background, rgba(127,127,127,.03)); }
+.endpoint-port > span { grid-column: 1 / -1; }
+.endpoint-port strong { color: var(--title-color, var(--text)); font-size: 17px; font-variant-numeric: tabular-nums; }
+.endpoint-port small { align-self: center; color: var(--hint-color, var(--text-weak)); font-size: 10px; }
+.endpoint-security { display: flex; box-sizing: border-box; min-height: 68px; flex-direction: column; justify-content: center; padding: 10px 13px; border-radius: 8px; background: rgba(23,133,255,.07); }
+.endpoint-security strong { color: var(--title-color, var(--text)); font-size: 11px; }
+.endpoint-security span { margin-top: 3px; color: var(--hint-color, var(--text-weak)); font-size: 10px; line-height: 1.4; }
+.endpoint-actions { margin-top: 16px; flex-wrap: wrap; }
+.endpoint-message { margin-left: auto; font-size: 11px; }
+.endpoint-message.is-success { color: var(--success-color, #20b26b); }
+.endpoint-message.is-error { color: var(--error-color, #e35d6a); }
+.endpoint-message.is-neutral { color: var(--hint-color, var(--text-weak)); }
 @keyframes progress-flow { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 @media (prefers-reduced-motion: reduce) { .speed-track span { transition: none; } .speed-track.running span { animation: none; } }
-@media (max-width: 980px) { .tools-grid { grid-template-columns: 1fr; grid-auto-rows: auto; } .tools-grid > * { height: auto; } }
+@media (max-width: 980px) { .tools-grid { grid-template-columns: 1fr; grid-auto-rows: auto; } .tools-grid > * { height: auto; } .endpoint-form { grid-template-columns: minmax(0, 1fr) 110px; } .endpoint-security { grid-column: 1 / -1; } }
 @media (max-width: 640px) { .speed-readings { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .endpoint-form { grid-template-columns: 1fr; } .endpoint-security { grid-column: auto; } .endpoint-message { width: 100%; margin-left: 0; } }
 </style>

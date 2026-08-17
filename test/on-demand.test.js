@@ -17,7 +17,7 @@ function filesBelow(directory, prefix) {
   });
 }
 
-test('package installs no background service, cron job, or persistent config', function() {
+test('package installs no background service, cron job, or persistent telemetry', function() {
   const manifest = JSON.parse(fs.readFileSync(
     path.join(projectRoot, 'gl-plugin.json'),
     'utf8'
@@ -25,7 +25,10 @@ test('package installs no background service, cron job, or persistent config', f
   const overlayFiles = filesBelow(path.join(projectRoot, 'overlay')).sort();
 
   assert.equal(manifest.lifecycle, undefined);
+  assert.deepEqual(manifest.package.conffiles, ['/etc/config/starlink-monitor']);
   assert.deepEqual(overlayFiles, [
+    path.join('etc', 'config', 'starlink-monitor'),
+    path.join('usr', 'lib', 'oui-httpd', 'rpc', 'starlink-monitor'),
     path.join('usr', 'share', 'licenses', 'gl-sdk4-ui-starlink-monitor', 'THIRD_PARTY_NOTICES.md'),
     path.join('www', 'cgi-bin', 'gl-starlink-monitor'),
   ]);
@@ -38,8 +41,11 @@ test('router proxy is read-only and uses tmpfs for each response', function() {
   );
 
   assert.match(proxy, /response_path="\/tmp\/gl-starlink-monitor\.\$\$"/);
-  assert.doesNotMatch(proxy, /\/etc\/|init\.d|crontab|\buci\b|\bopkg\b/);
+  assert.match(proxy, /uci -q get starlink-monitor\.main\.address/);
+  assert.match(proxy, /"http:\/\/\$\{dish_address\}:9201\/SpaceX\.API\.Device\.Device\/Handle"/);
+  assert.doesNotMatch(proxy, /init\.d|crontab|\bopkg\b/);
   assert.doesNotMatch(proxy, /--request\s+(?:PUT|PATCH|DELETE)/);
+  assert.doesNotMatch(proxy, /QUERY_STRING[^\n]*(?:address|host|port|url)/);
 });
 
 test('browser polling pauses off-page and is destroyed with the view', function() {

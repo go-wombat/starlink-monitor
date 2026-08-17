@@ -30,6 +30,34 @@ case "${QUERY_STRING:-}" in
     ;;
 esac
 
+valid_ipv4() {
+  candidate="$1"
+  case "$candidate" in
+    ''|*[!0-9.]*) return 1 ;;
+  esac
+
+  previous_ifs="$IFS"
+  IFS=.
+  set -- $candidate
+  IFS="$previous_ifs"
+  [ "$#" -eq 4 ] || return 1
+
+  first="$1"
+  for octet in "$@"; do
+    case "$octet" in
+      0|[1-9]|[1-9][0-9]|[1-9][0-9][0-9]) ;;
+      *) return 1 ;;
+    esac
+    [ "$octet" -le 255 ] || return 1
+  done
+  [ "$first" -ne 0 ] && [ "$first" -ne 127 ] && [ "$first" -lt 224 ]
+}
+
+dish_address="$(uci -q get starlink-monitor.main.address 2>/dev/null || true)"
+if ! valid_ipv4 "$dish_address"; then
+  dish_address='192.168.100.1'
+fi
+
 umask 077
 response_path="/tmp/gl-starlink-monitor.$$"
 trap 'rm -f "$response_path"' EXIT HUP INT TERM
@@ -43,7 +71,7 @@ if printf '%b' "$request" | /usr/bin/curl \
   --header 'X-Grpc-Web: 1' \
   --data-binary '@-' \
   --output "$response_path" \
-  'http://192.168.100.1:9201/SpaceX.API.Device.Device/Handle' 2>/dev/null; then
+  "http://${dish_address}:9201/SpaceX.API.Device.Device/Handle" 2>/dev/null; then
   printf '%s\r\n' 'Content-Type: application/grpc-web+proto'
   printf '%s\r\n\r\n' 'Cache-Control: no-store'
   cat "$response_path"

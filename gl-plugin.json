@@ -52,9 +52,13 @@
     "depends": [
       "libc",
       "gl-sdk4-ui-core",
-      "curl"
+      "curl",
+      "gl-oui-rpc",
+      "uci"
     ],
-    "conffiles": []
+    "conffiles": [
+      "/etc/config/starlink-monitor"
+    ]
   },
   "overlay": "overlay"
 }

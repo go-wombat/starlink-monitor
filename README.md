@@ -1,7 +1,7 @@
 # Starlink Monitor
 
-Native GL.iNet SDK4 dashboard for a Starlink dish reachable at
-`192.168.100.1:9201`.
+Native GL.iNet SDK4 dashboard for a Starlink dish. The local endpoint defaults
+to `192.168.100.1:9201` and its IPv4 address can be changed from Tools.
 
 Built with [`gl-sdk4-plugin-kit`](https://github.com/go-wombat/gl-sdk4-plugin-kit).
 
@@ -24,7 +24,8 @@ The native `Starlink` submenu contains five focused views:
 - **Sky** — a large obstruction survey, sky coverage metrics and current pointing;
 - **Network** — read-only GL.iNet client and link counters related to the local
   Starlink setup;
-- **Tools** — a user-triggered browser speed test and one-shot local diagnostics.
+- **Tools** — a user-triggered browser speed test, one-shot local diagnostics,
+  and the authenticated Dish endpoint setting.
 
 Overview, Dish, and Sky update automatically only while their page is visible.
 Tools never starts work by itself. Closing or hiding a page stops its timers and
@@ -55,15 +56,19 @@ The generated OpenWrt package is written to `dist/`. Install it with
 `npm run router:install` after configuring the router connection used by the
 SDK CLI.
 
-The full-stack package depends on OpenWrt's `curl` package. Its only router-side
-executable is `/www/cgi-bin/gl-starlink-monitor`, a fixed read-only proxy for
-the three protobuf requests used by the UI.
+The full-stack package depends on OpenWrt's `curl`, `gl-oui-rpc`, and `uci`
+packages. Its only router-side executable is `/www/cgi-bin/gl-starlink-monitor`,
+a fixed read-only proxy for the three protobuf requests used by the UI.
 
 ## Safety boundary
 
-The proxy accepts only `status`, `history`, and `obstruction`. It does not
-accept a target URL, request bytes, Starlink account credentials, or write
-commands. Starlink's local API is unofficial and may change with firmware.
+The proxy accepts only `status`, `history`, and `obstruction`. It does not accept
+a target URL, request bytes, Starlink account credentials, or write commands.
+The endpoint setting is changed through an authenticated GL.iNet RPC module,
+accepts only a validated unicast IPv4 address, and keeps the protocol, port, and
+RPC path fixed. The CGI validates the stored address again before every request.
+The setting is written only when Save or Reset is pressed; telemetry is never
+persisted. Starlink's local API is unofficial and may change with firmware.
 
 See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the Dishylink MIT
 attribution.
