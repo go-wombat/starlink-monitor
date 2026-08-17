@@ -1,0 +1,13 @@
+{
+  "index": 20,
+  "view": "starlink-monitor-dish",
+  "title": {
+    "translate": "starlink-monitor.menu.dish"
+  },
+  "icon": "setting",
+  "level": 2,
+  "parent": "starlink",
+  "parent_title": "Starlink",
+  "parent_icon": "network",
+  "parent_index": 85
+}

@@ -1,0 +1,11 @@
+{
+  "starlink-monitor": {
+    "menu": {
+      "overview": "Overview",
+      "dish": "Dish",
+      "sky": "Sky",
+      "network": "Network",
+      "tools": "Tools"
+    }
+  }
+}

@@ -1,0 +1,54 @@
+#!/bin/sh
+
+set -eu
+
+if [ "${REQUEST_METHOD:-GET}" != "GET" ]; then
+  printf '%s\r\n' 'Status: 405 Method Not Allowed'
+  printf '%s\r\n' 'Allow: GET'
+  printf '%s\r\n\r\n' 'Content-Type: application/json'
+  printf '%s\n' '{"error":"method_not_allowed"}'
+  exit 0
+fi
+
+case "${QUERY_STRING:-}" in
+  action=status)
+    request='\000\000\000\000\003\342\076\000'
+    timeout=5
+    ;;
+  action=history)
+    request='\000\000\000\000\003\372\076\000'
+    timeout=8
+    ;;
+  action=obstruction)
+    request='\000\000\000\000\003\302\175\000'
+    timeout=8
+    ;;
+  *)
+    printf '%s\r\n\r\n' 'Status: 400 Bad Request' 'Content-Type: application/json'
+    printf '%s\n' '{"error":"unknown_action"}'
+    exit 0
+    ;;
+esac
+
+umask 077
+response_path="/tmp/gl-starlink-monitor.$$"
+trap 'rm -f "$response_path"' EXIT HUP INT TERM
+
+if printf '%b' "$request" | /usr/bin/curl \
+  --silent \
+  --show-error \
+  --fail \
+  --max-time "$timeout" \
+  --header 'Content-Type: application/grpc-web+proto' \
+  --header 'X-Grpc-Web: 1' \
+  --data-binary '@-' \
+  --output "$response_path" \
+  'http://192.168.100.1:9201/SpaceX.API.Device.Device/Handle' 2>/dev/null; then
+  printf '%s\r\n' 'Content-Type: application/grpc-web+proto'
+  printf '%s\r\n\r\n' 'Cache-Control: no-store'
+  cat "$response_path"
+else
+  printf '%s\r\n' 'Status: 502 Bad Gateway'
+  printf '%s\r\n\r\n' 'Content-Type: application/json' 'Cache-Control: no-store'
+  printf '%s\n' '{"error":"dish_unreachable"}'
+fi

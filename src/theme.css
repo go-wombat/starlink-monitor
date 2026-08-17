@@ -1,0 +1,36 @@
+/*
+ * Plugin-local theme contract.
+ *
+ * GL.iNet firmware 4.8.1 exposes --text-weak in Dark, but leaves the public
+ * title/text/card variables empty. Define them only on Starlink roots so all
+ * independently built views keep the same readable palette.
+ */
+.starlink-monitor-wrapper,
+.starlink-page,
+.network-wrapper {
+  --title-color: #242838;
+  --text-color: #2f3342;
+  --hint-color: #6f7687;
+  --label-color: #6f7687;
+  --card-border: #dfe3eb;
+  --table-border: #e4e7ee;
+  --input-border: #c9cfda;
+  --card-color: #ffffff;
+  --background: #ffffff;
+  --body-background: rgba(47, 51, 66, 0.03);
+}
+
+.starlink-monitor-wrapper.is-dark-theme,
+.starlink-page.is-dark-theme,
+.network-wrapper.is-dark-theme {
+  --title-color: #cdcee0;
+  --text-color: #e7e8f3;
+  --hint-color: #9195aa;
+  --label-color: #9195aa;
+  --card-border: #36384f;
+  --table-border: #303248;
+  --input-border: #454861;
+  --card-color: #141427;
+  --background: #141427;
+  --body-background: rgba(255, 255, 255, 0.035);
+}

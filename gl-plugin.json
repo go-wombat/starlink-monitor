@@ -1,0 +1,60 @@
+{
+  "$schema": "https://raw.githubusercontent.com/go-wombat/gl-sdk4-plugin-kit/main/schema/gl-plugin.schema.json",
+  "schemaVersion": 1,
+  "id": "starlink-monitor",
+  "profile": "full-stack",
+  "views": [
+    {
+      "id": "starlink-monitor",
+      "entry": "src/index.vue",
+      "menu": "menu.json"
+    },
+    {
+      "id": "starlink-monitor-dish",
+      "entry": "src/dish.vue",
+      "menu": "menus/dish.json"
+    },
+    {
+      "id": "starlink-monitor-sky",
+      "entry": "src/sky.vue",
+      "menu": "menus/sky.json"
+    },
+    {
+      "id": "starlink-monitor-network",
+      "entry": "src/network.vue",
+      "menu": "menus/network.json"
+    },
+    {
+      "id": "starlink-monitor-tools",
+      "entry": "src/tools.vue",
+      "menu": "menus/tools.json"
+    }
+  ],
+  "compatibility": {
+    "minimumFirmware": "4.8.0",
+    "requiredComponents": [
+      "gl-card",
+      "gl-button",
+      "gl-line-chart",
+      "gl-tips",
+      "gl-title"
+    ],
+    "requiredCapabilities": [
+      "clients"
+    ]
+  },
+  "package": {
+    "name": "gl-sdk4-ui-starlink-monitor",
+    "architecture": "all",
+    "section": "base",
+    "source": "gl-sdk4-plugin-kit",
+    "description": "On-demand local Starlink telemetry in the GL.iNet admin panel",
+    "depends": [
+      "libc",
+      "gl-sdk4-ui-core",
+      "curl"
+    ],
+    "conffiles": []
+  },
+  "overlay": "overlay"
+}

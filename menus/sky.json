@@ -1,0 +1,13 @@
+{
+  "index": 30,
+  "view": "starlink-monitor-sky",
+  "title": {
+    "translate": "starlink-monitor.menu.sky"
+  },
+  "icon": "wifi",
+  "level": 2,
+  "parent": "starlink",
+  "parent_title": "Starlink",
+  "parent_icon": "network",
+  "parent_index": 85
+}
