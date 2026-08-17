@@ -5,6 +5,8 @@ Native GL.iNet SDK4 dashboard for a Starlink dish reachable at
 
 Built with [`gl-sdk4-plugin-kit`](https://github.com/go-wombat/gl-sdk4-plugin-kit).
 
+![Starlink Monitor overview](docs/starlink-overview.jpg)
+
 The plugin is deliberately on-demand:
 
 - no init service or historian is installed;
