@@ -4,8 +4,6 @@ Native GL.iNet SDK4 dashboard for a Starlink dish reachable at
 `192.168.100.1:9201`.
 
 Built with [`gl-sdk4-plugin-kit`](https://github.com/go-wombat/gl-sdk4-plugin-kit).
-The SDK repository also carries a buildable snapshot under
-[`examples/starlink-monitor`](https://github.com/go-wombat/gl-sdk4-plugin-kit/tree/main/examples/starlink-monitor).
 
 The plugin is deliberately on-demand:
 
