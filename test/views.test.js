@@ -46,12 +46,17 @@ test('tools view is manual and visible pages tear down all polling', function() 
   assert.match(tools, /mounted\(\)[\s\S]*visibilitychange/);
   assert.doesNotMatch(mountedBlock, /startSpeedTest\(/);
   assert.doesNotMatch(mountedBlock, /runDiagnostics\(/);
+  assert.doesNotMatch(mountedBlock, /checkForUpdates\(/);
   assert.match(mountedBlock, /loadEndpointConfig\(\)/);
   assert.match(tools, /beforeDestroy\(\)[\s\S]*cancelSpeedTest\(\)/);
   assert.match(tools, /gl-sdk4-plugin-kit\/lib\/safe-rpc-mixin/);
   assert.match(tools, /title="Dish endpoint"/);
   assert.match(tools, /safeRpc\('starlink-monitor', 'set_config'/);
   assert.match(tools, /safeRpc\('starlink-monitor', 'test_config'/);
+  assert.match(tools, /title="Plugin updates"/);
+  assert.match(tools, /fetch\(RELEASE_API_URL/);
+  assert.match(tools, /Nothing was downloaded or installed/);
+  assert.doesNotMatch(tools, /setInterval\([^)]*checkForUpdates|opkg|autoInstall/i);
   assert.doesNotMatch(tools, /\$axios|fetch\([^)]*(?:set_config|test_config)/);
   assert.match(network, /const NETWORK_INTERVAL_MS = 5000;/);
   assert.match(network, /routerCall\('clients', 'get_list'\)/);
@@ -101,7 +106,7 @@ test('all views share one meaningful page header contract', function() {
   assert.match(views.Dish, /Alignment, health and terminal details/);
   assert.match(views.Sky, /Obstruction survey and terminal pointing/);
   assert.match(views.Network, /GL\.iNet clients, radios and traffic counters/);
-  assert.match(views.Tools, /Browser speed test and one-shot endpoint checks/);
+  assert.match(views.Tools, /Manual tests, endpoint settings and update checks/);
 });
 
 test('all dashboard panels share one header and semantic badge contract', function() {

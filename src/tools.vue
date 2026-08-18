@@ -163,6 +163,34 @@
       </div>
     </gl-card>
 
+    <gl-card class="gl-sdk4-card update-card">
+      <starlink-panel-header
+        title="Plugin updates"
+        subtitle="Checks the latest GitHub Release only when requested"
+        :badge="'v' + pluginVersion"
+        :badge-tone="updateBadgeTone"
+      />
+
+      <div class="update-layout">
+        <div class="update-state" aria-live="polite">
+          <strong>{{ updateHeadline }}</strong>
+          <p>{{ updateDetail }}</p>
+        </div>
+        <div class="action-row update-actions">
+          <gl-button type="primary" :loading="updateChecking" @click="checkForUpdates">
+            Check for updates
+          </gl-button>
+          <a
+            v-if="updateReleaseUrl"
+            class="release-link"
+            :href="updateReleaseUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+          >Open release</a>
+        </div>
+      </div>
+    </gl-card>
+
   </div>
 </template>
 
@@ -174,6 +202,7 @@ const {
   isValidDishAddress,
 } = require('./endpoint-config');
 const pluginPackage = require('../package.json');
+const { RELEASE_API_URL, releaseState } = require('./release-check');
 const starlinkApi = require('./starlink-api');
 const { decodeHistoryWindow } = require('./history');
 const { runSpeedTest } = require('./speed-test');
@@ -200,6 +229,11 @@ export default {
       endpointTesting: false,
       endpointMessage: '',
       endpointMessageTone: 'neutral',
+      pluginVersion: pluginPackage.version,
+      updateChecking: false,
+      updateStatus: 'idle',
+      updateLatestVersion: '',
+      updateReleaseUrl: '',
       speedResult: {
         phase: 'idle',
         downloadMbps: null,
@@ -221,6 +255,7 @@ export default {
       return (this.$store && this.$store.state && this.$store.state.theme) || 'default';
     },
     headerStatus() {
+      if (this.updateChecking) return 'Checking for plugin updates';
       if (this.diagnosticsRunning) return 'Running local diagnostics';
       if (this.speedRunning) return 'Speed test in progress';
       if (this.speedPhase === 'done') return 'Speed test complete';
@@ -231,25 +266,38 @@ export default {
           ? 'Diagnostics complete'
           : 'Diagnostics found issues';
       }
+      if (this.updateStatus === 'available') return 'Plugin update available';
+      if (this.updateStatus === 'current') return 'Plugin is up to date';
+      if (this.updateStatus === 'error') return 'Update check failed';
       return 'Manual tools ready';
     },
     headerTone() {
-      if (this.speedRunning || this.diagnosticsRunning) return 'warning';
+      if (this.speedRunning || this.diagnosticsRunning || this.updateChecking) return 'warning';
       if (this.speedPhase === 'done') return 'online';
       if (this.speedPhase === 'error') return 'warning';
       if (this.diagnostics.length) {
         return this.diagnostics.every(function(row) { return row.ok; }) ? 'online' : 'warning';
       }
+      if (this.updateStatus === 'current') return 'online';
+      if (this.updateStatus === 'available' || this.updateStatus === 'error') return 'warning';
       return 'pending';
     },
     headerSubtitle() {
+      if (this.updateChecking) return 'Reading the latest GitHub Release from this browser';
       if (this.diagnosticsRunning) return 'Checking status, history and obstruction endpoints';
       if (this.speedRunning) return 'Measuring this browser’s path through the Starlink connection';
       if (this.diagnostics.length) {
         const passed = this.diagnostics.filter(function(row) { return row.ok; }).length;
         return `${passed} of ${this.diagnostics.length} endpoint checks passed · Run only on demand`;
       }
-      return 'Browser speed test and one-shot endpoint checks · Run only on demand';
+      if (this.updateStatus === 'available') {
+        return `v${this.updateLatestVersion} is available · Nothing was downloaded or installed`;
+      }
+      if (this.updateStatus === 'current') {
+        return `v${this.pluginVersion} matches the latest GitHub Release`;
+      }
+      if (this.updateStatus === 'error') return 'GitHub Releases could not be checked';
+      return 'Manual tests, endpoint settings and update checks · Run only on demand';
     },
     speedPhase() {
       return this.speedResult.phase || 'idle';
@@ -265,6 +313,25 @@ export default {
     },
     endpointDirty() {
       return this.endpointDraft !== this.endpointAddress;
+    },
+    updateBadgeTone() {
+      if (this.updateStatus === 'current') return 'success';
+      if (this.updateStatus === 'available') return 'warning';
+      if (this.updateStatus === 'error') return 'danger';
+      return 'info';
+    },
+    updateHeadline() {
+      if (this.updateChecking) return 'Checking GitHub Releases…';
+      if (this.updateStatus === 'available') return `v${this.updateLatestVersion} is available`;
+      if (this.updateStatus === 'current') return `v${this.pluginVersion} is current`;
+      if (this.updateStatus === 'error') return 'Could not check for updates';
+      return 'No update check has been made';
+    },
+    updateDetail() {
+      if (this.updateStatus === 'available') return 'Open the release to review and download it manually.';
+      if (this.updateStatus === 'current') return 'The installed version matches or exceeds the latest release.';
+      if (this.updateStatus === 'error') return 'Check this router’s internet access and try again.';
+      return 'This page makes no release request until you press the button.';
     },
     speedLatency() {
       return this.speedLatencyValue === null ? '--' : formatNumber(this.speedLatencyValue, 0);
@@ -309,6 +376,29 @@ export default {
     },
     speedValue(value) {
       return Number.isFinite(Number(value)) ? formatNumber(value, 1) : '--';
+    },
+    async checkForUpdates() {
+      if (this.updateChecking) return;
+      this.updateChecking = true;
+      this.updateStatus = 'idle';
+      this.updateLatestVersion = '';
+      this.updateReleaseUrl = '';
+      try {
+        const response = await fetch(RELEASE_API_URL, {
+          method: 'GET',
+          cache: 'no-store',
+          headers: { Accept: 'application/vnd.github+json' },
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const state = releaseState(this.pluginVersion, await response.json());
+        this.updateLatestVersion = state.latestVersion;
+        this.updateReleaseUrl = state.releaseUrl;
+        this.updateStatus = state.updateAvailable ? 'available' : 'current';
+      } catch (error) {
+        this.updateStatus = 'error';
+      } finally {
+        this.updateChecking = false;
+      }
     },
     async loadEndpointConfig() {
       this.endpointLoading = true;
@@ -580,9 +670,15 @@ export default {
 .endpoint-message.is-success { color: var(--success-color, #20b26b); }
 .endpoint-message.is-error { color: var(--error-color, #e35d6a); }
 .endpoint-message.is-neutral { color: var(--hint-color, var(--text-weak)); }
+.update-layout { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: center; min-height: 76px; }
+.update-state strong { color: var(--title-color, var(--text)); font-size: 13px; }
+.update-state p { margin: 5px 0 0; color: var(--hint-color, var(--text-weak)); font-size: 11px; line-height: 1.5; }
+.update-actions { justify-content: flex-end; }
+.release-link { display: inline-flex; box-sizing: border-box; min-height: 40px; align-items: center; padding: 0 15px; border: 1px solid var(--card-border, var(--border)); border-radius: 4px; color: var(--primary-color, #1785ff); font-size: 12px; font-weight: 550; text-decoration: none; }
+.release-link:hover { border-color: var(--primary-color, #1785ff); }
 @keyframes progress-flow { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 @media (prefers-reduced-motion: reduce) { .speed-track span { transition: none; } .speed-track.running span { animation: none; } }
 @media (max-width: 980px) { .tools-grid { grid-template-columns: 1fr; grid-auto-rows: auto; } .tools-grid > * { height: auto; } .endpoint-form { grid-template-columns: minmax(0, 1fr) 110px; } .endpoint-security { grid-column: 1 / -1; } }
 @media (max-width: 640px) { .speed-readings { grid-template-columns: 1fr; } }
-@media (max-width: 560px) { .endpoint-form { grid-template-columns: 1fr; } .endpoint-security { grid-column: auto; } .endpoint-message { width: 100%; margin-left: 0; } }
+@media (max-width: 560px) { .endpoint-form { grid-template-columns: 1fr; } .endpoint-security { grid-column: auto; } .endpoint-message { width: 100%; margin-left: 0; } .update-layout { grid-template-columns: 1fr; } .update-actions { justify-content: flex-start; } }
 </style>

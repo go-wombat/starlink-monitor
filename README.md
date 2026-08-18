@@ -27,7 +27,7 @@ The native `Starlink` submenu contains five focused views:
 - **Network** — read-only GL.iNet client and link counters related to the local
   Starlink setup;
 - **Tools** — a user-triggered browser speed test, one-shot local diagnostics,
-  and the authenticated Dish endpoint setting.
+  the authenticated Dish endpoint setting, and a manual release check.
 
 Overview, Dish, and Sky update automatically only while their page is visible.
 Tools never starts work by itself. Closing or hiding a page stops its timers and
@@ -77,7 +77,9 @@ The endpoint setting is changed through an authenticated GL.iNet RPC module,
 accepts only a validated unicast IPv4 address, and keeps the protocol, port, and
 RPC path fixed. The CGI validates the stored address again before every request.
 The setting is written only when Save or Reset is pressed; telemetry is never
-persisted. Starlink's local API is unofficial and may change with firmware.
+persisted. The update button contacts the fixed GitHub Releases API directly
+from the browser only when pressed; it never downloads or installs a package.
+Starlink's local API is unofficial and may change with firmware.
 
 See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the Dishylink MIT
 attribution.
