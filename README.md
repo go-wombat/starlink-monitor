@@ -27,7 +27,7 @@ The native `Starlink` submenu contains five focused views:
 - **Network** — read-only GL.iNet client and link counters related to the local
   Starlink setup;
 - **Tools** — a user-triggered browser speed test, one-shot local diagnostics,
-  the authenticated Dish endpoint setting, and a manual release check.
+  the authenticated Dish endpoint setting, and verified plugin updates.
 
 Overview, Dish, and Sky update automatically only while their page is visible.
 Tools never starts work by itself. Closing or hiding a page stops its timers and
@@ -62,6 +62,24 @@ Published `.ipk` packages and their `SHA256SUMS` file are available from
 [GitHub Releases](https://github.com/go-wombat/starlink-monitor/releases). Each
 `v*` tag is rebuilt, tested, packaged, checksummed, and published automatically.
 
+## Real-router smoke test
+
+The SDK CLI plus the plugin-specific smoke runner can build and install the IPK,
+verify every menu and bundle, prove that missing and unknown CGI sessions return
+`401`, call the plugin RPC with a real admin session, and decode live Dish status:
+
+```bash
+glplugin target add starlink root@192.168.8.1 --use
+npm run router:smoke -- --install
+```
+
+The command prompts without echoing or storing the admin password. `--install`
+is explicit; omit it to test the already installed package. Automation can pass
+one password line with `--password-stdin`. The manual `Router smoke test` GitHub
+workflow runs the same command on a self-hosted runner labelled
+`starlink-router`; it requires `ROUTER_TARGET`, `ROUTER_PASSWORD`, and SSH key
+access to the router.
+
 The full-stack package depends on OpenWrt's `curl`, `gl-oui-rpc`, `ubus`,
 `jsonfilter`, and `uci` packages. Its router-side CGI is a fixed read-only proxy
 for the three protobuf requests used by the UI.
@@ -77,9 +95,14 @@ The endpoint setting is changed through an authenticated GL.iNet RPC module,
 accepts only a validated unicast IPv4 address, and keeps the protocol, port, and
 RPC path fixed. The CGI validates the stored address again before every request.
 The setting is written only when Save or Reset is pressed; telemetry is never
-persisted. The update button contacts the fixed GitHub Releases API directly
-from the browser only when pressed; it never downloads or installs a package.
-Starlink's local API is unofficial and may change with firmware.
+persisted. The update check contacts the fixed GitHub Releases API directly from
+the browser only when pressed. Installation is a second, separately confirmed
+admin RPC action. The router accepts only a strict newer version, downloads only
+the fixed repository's HTTPS release asset, requires one exact `SHA256SUMS`
+entry, verifies the package hash, serializes installs with a temporary lock, and
+then invokes `opkg`. There is no automatic check, download, installation,
+daemon, cron job, database, or persistent telemetry. Starlink's local API is
+unofficial and may change with firmware.
 
 See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the Dishylink MIT
 attribution.

@@ -1,0 +1,8 @@
+#!/bin/sh
+
+# Drop a removed plugin's cached Lua RPC object from the nginx workers.
+[ -n "${IPKG_INSTROOT:-}" ] && exit 0
+if [ -x /usr/sbin/nginx ] && [ -s /var/run/nginx.pid ]; then
+	/usr/sbin/nginx -s reload >/dev/null 2>&1 || true
+fi
+exit 0

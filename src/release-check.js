@@ -28,10 +28,12 @@ function releaseState(currentVersion, payload) {
     throw new Error('invalid_release');
   }
   const latestVersion = latestParts.join('.');
+  const comparison = compareVersions(latestVersion, currentVersion);
   return {
     latestVersion,
     releaseUrl: RELEASE_PAGE_PREFIX + encodeURIComponent(`v${latestVersion}`),
-    updateAvailable: compareVersions(latestVersion, currentVersion) > 0,
+    updateAvailable: comparison > 0,
+    currentAhead: comparison < 0,
   };
 }
 

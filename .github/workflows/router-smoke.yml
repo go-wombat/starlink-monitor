@@ -1,0 +1,46 @@
+name: Router smoke test
+
+on:
+  workflow_dispatch:
+    inputs:
+      install:
+        description: Build and install the IPK before testing
+        required: true
+        default: true
+        type: boolean
+      allow_unverified:
+        description: Allow an unknown but compatible firmware fingerprint
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: starlink-router-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: [self-hosted, linux, starlink-router]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - name: Test the real router
+        shell: bash
+        env:
+          GLPLUGIN_HOST: ${{ secrets.ROUTER_TARGET }}
+          ROUTER_PASSWORD: ${{ secrets.ROUTER_PASSWORD }}
+          INSTALL_PLUGIN: ${{ inputs.install }}
+          ALLOW_UNVERIFIED: ${{ inputs.allow_unverified }}
+        run: |
+          args=(--password-stdin)
+          if [[ "$INSTALL_PLUGIN" == "true" ]]; then args+=(--install); fi
+          if [[ "$ALLOW_UNVERIFIED" == "true" ]]; then args+=(--allow-unverified); fi
+          printf '%s\n' "$ROUTER_PASSWORD" | npm run router:smoke -- "${args[@]}"

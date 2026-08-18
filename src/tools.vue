@@ -177,8 +177,22 @@
           <p>{{ updateDetail }}</p>
         </div>
         <div class="action-row update-actions">
-          <gl-button type="primary" :loading="updateChecking" @click="checkForUpdates">
+          <gl-button
+            type="primary"
+            :loading="updateChecking"
+            :disabled="updateInstalling"
+            @click="checkForUpdates"
+          >
             Check for updates
+          </gl-button>
+          <gl-button
+            v-if="updateStatus === 'available'"
+            type="primary"
+            :loading="updateInstalling"
+            :disabled="updateChecking"
+            @click="installUpdate"
+          >
+            Install v{{ updateLatestVersion }}
           </gl-button>
           <a
             v-if="updateReleaseUrl"
@@ -231,9 +245,12 @@ export default {
       endpointMessageTone: 'neutral',
       pluginVersion: pluginPackage.version,
       updateChecking: false,
+      updateInstalling: false,
       updateStatus: 'idle',
       updateLatestVersion: '',
       updateReleaseUrl: '',
+      updateInstallError: '',
+      reloadTimer: null,
       speedResult: {
         phase: 'idle',
         downloadMbps: null,
@@ -255,6 +272,9 @@ export default {
       return (this.$store && this.$store.state && this.$store.state.theme) || 'default';
     },
     headerStatus() {
+      if (this.updateInstalling) return 'Installing plugin update';
+      if (this.updateStatus === 'installed') return 'Plugin update installed';
+      if (this.updateStatus === 'install-error') return 'Plugin update failed';
       if (this.updateChecking) return 'Checking for plugin updates';
       if (this.diagnosticsRunning) return 'Running local diagnostics';
       if (this.speedRunning) return 'Speed test in progress';
@@ -268,21 +288,27 @@ export default {
       }
       if (this.updateStatus === 'available') return 'Plugin update available';
       if (this.updateStatus === 'current') return 'Plugin is up to date';
+      if (this.updateStatus === 'ahead') return 'Installed version is newer';
       if (this.updateStatus === 'error') return 'Update check failed';
       return 'Manual tools ready';
     },
     headerTone() {
-      if (this.speedRunning || this.diagnosticsRunning || this.updateChecking) return 'warning';
+      if (this.speedRunning || this.diagnosticsRunning || this.updateChecking || this.updateInstalling) return 'warning';
+      if (this.updateStatus === 'installed') return 'online';
+      if (this.updateStatus === 'install-error') return 'warning';
       if (this.speedPhase === 'done') return 'online';
       if (this.speedPhase === 'error') return 'warning';
       if (this.diagnostics.length) {
         return this.diagnostics.every(function(row) { return row.ok; }) ? 'online' : 'warning';
       }
-      if (this.updateStatus === 'current') return 'online';
+      if (this.updateStatus === 'current' || this.updateStatus === 'ahead') return 'online';
       if (this.updateStatus === 'available' || this.updateStatus === 'error') return 'warning';
       return 'pending';
     },
     headerSubtitle() {
+      if (this.updateInstalling) return `Downloading and verifying v${this.updateLatestVersion} on the router`;
+      if (this.updateStatus === 'installed') return `v${this.updateLatestVersion} is installed · Reloading the admin panel`;
+      if (this.updateStatus === 'install-error') return 'The update did not complete';
       if (this.updateChecking) return 'Reading the latest GitHub Release from this browser';
       if (this.diagnosticsRunning) return 'Checking status, history and obstruction endpoints';
       if (this.speedRunning) return 'Measuring this browser’s path through the Starlink connection';
@@ -295,6 +321,9 @@ export default {
       }
       if (this.updateStatus === 'current') {
         return `v${this.pluginVersion} matches the latest GitHub Release`;
+      }
+      if (this.updateStatus === 'ahead') {
+        return `v${this.pluginVersion} is newer than the latest GitHub Release v${this.updateLatestVersion}`;
       }
       if (this.updateStatus === 'error') return 'GitHub Releases could not be checked';
       return 'Manual tests, endpoint settings and update checks · Run only on demand';
@@ -315,21 +344,29 @@ export default {
       return this.endpointDraft !== this.endpointAddress;
     },
     updateBadgeTone() {
-      if (this.updateStatus === 'current') return 'success';
+      if (this.updateStatus === 'current' || this.updateStatus === 'ahead' || this.updateStatus === 'installed') return 'success';
       if (this.updateStatus === 'available') return 'warning';
-      if (this.updateStatus === 'error') return 'danger';
+      if (this.updateStatus === 'error' || this.updateStatus === 'install-error') return 'danger';
       return 'info';
     },
     updateHeadline() {
+      if (this.updateInstalling) return `Installing v${this.updateLatestVersion}…`;
+      if (this.updateStatus === 'installed') return `v${this.updateLatestVersion} installed`;
+      if (this.updateStatus === 'install-error') return 'Update was not installed';
       if (this.updateChecking) return 'Checking GitHub Releases…';
       if (this.updateStatus === 'available') return `v${this.updateLatestVersion} is available`;
       if (this.updateStatus === 'current') return `v${this.pluginVersion} is current`;
+      if (this.updateStatus === 'ahead') return `v${this.pluginVersion} is ahead of the latest release`;
       if (this.updateStatus === 'error') return 'Could not check for updates';
       return 'No update check has been made';
     },
     updateDetail() {
-      if (this.updateStatus === 'available') return 'Open the release to review and download it manually.';
-      if (this.updateStatus === 'current') return 'The installed version matches or exceeds the latest release.';
+      if (this.updateInstalling) return 'The router is downloading the fixed release asset and checking its published SHA-256 checksum.';
+      if (this.updateStatus === 'installed') return 'Checksum verified and package upgraded successfully.';
+      if (this.updateStatus === 'install-error') return this.updateInstallError;
+      if (this.updateStatus === 'available') return 'Review the release or install it now. Installation requires explicit confirmation.';
+      if (this.updateStatus === 'current') return 'The installed version matches the latest release.';
+      if (this.updateStatus === 'ahead') return `The latest published release is v${this.updateLatestVersion}.`;
       if (this.updateStatus === 'error') return 'Check this router’s internet access and try again.';
       return 'This page makes no release request until you press the button.';
     },
@@ -368,6 +405,7 @@ export default {
     document.removeEventListener('visibilitychange', this.handleVisibilityChange);
     this.cancelSpeedTest();
     if (this.diagnosticsController) this.diagnosticsController.abort();
+    if (this.reloadTimer) window.clearTimeout(this.reloadTimer);
   },
   methods: {
     handleVisibilityChange() {
@@ -378,11 +416,12 @@ export default {
       return Number.isFinite(Number(value)) ? formatNumber(value, 1) : '--';
     },
     async checkForUpdates() {
-      if (this.updateChecking) return;
+      if (this.updateChecking || this.updateInstalling) return;
       this.updateChecking = true;
       this.updateStatus = 'idle';
       this.updateLatestVersion = '';
       this.updateReleaseUrl = '';
+      this.updateInstallError = '';
       try {
         const response = await fetch(RELEASE_API_URL, {
           method: 'GET',
@@ -393,12 +432,58 @@ export default {
         const state = releaseState(this.pluginVersion, await response.json());
         this.updateLatestVersion = state.latestVersion;
         this.updateReleaseUrl = state.releaseUrl;
-        this.updateStatus = state.updateAvailable ? 'available' : 'current';
+        this.updateStatus = state.updateAvailable
+          ? 'available'
+          : state.currentAhead ? 'ahead' : 'current';
       } catch (error) {
         this.updateStatus = 'error';
       } finally {
         this.updateChecking = false;
       }
+    },
+    updateErrorMessage(code) {
+      const messages = {
+        invalid_version: 'GitHub returned a release version the router refused to accept.',
+        update_tools_unavailable: 'The router is missing a command required for verified installation.',
+        installed_version_unavailable: 'The router could not determine the currently installed version.',
+        not_newer: 'The selected release is no longer newer than the installed plugin.',
+        update_busy: 'Another Starlink Monitor update is already running.',
+        temporary_storage_unavailable: 'The router could not create temporary update storage.',
+        checksum_download_failed: 'The published SHA256SUMS file could not be downloaded.',
+        package_download_failed: 'The release package could not be downloaded.',
+        checksum_manifest_invalid: 'The release checksum file did not contain one exact package entry.',
+        checksum_mismatch: 'The downloaded package did not match its published SHA-256 checksum.',
+        install_failed: 'OpenWrt rejected the verified package during installation.',
+        installed_version_mismatch: 'OpenWrt finished without activating the expected plugin version.',
+        update_runner_unavailable: 'The router update helper could not be started.',
+      };
+      return messages[code] || 'The update could not be completed. Check the router logs before retrying.';
+    },
+    async installUpdate() {
+      if (this.updateInstalling || this.updateStatus !== 'available') return;
+      const confirmed = window.confirm(
+        `Install Starlink Monitor v${this.updateLatestVersion}?\n\n` +
+        'The router will download the fixed GitHub Release package, verify its SHA-256 checksum, ' +
+        'and upgrade it with OpenWrt. Your Dish endpoint setting will be retained.'
+      );
+      if (!confirmed) return;
+
+      this.updateInstalling = true;
+      this.updateInstallError = '';
+      const result = await this.safeRpc('starlink-monitor', 'install_update', {
+        version: this.updateLatestVersion,
+      });
+      this.updateInstalling = false;
+      if (result && result.updated && result.version === this.updateLatestVersion) {
+        this.updateStatus = 'installed';
+        this.reloadTimer = window.setTimeout(function() {
+          window.location.reload();
+        }, 1600);
+        return;
+      }
+
+      this.updateStatus = 'install-error';
+      this.updateInstallError = this.updateErrorMessage(result && result.err_msg);
     },
     async loadEndpointConfig() {
       this.endpointLoading = true;

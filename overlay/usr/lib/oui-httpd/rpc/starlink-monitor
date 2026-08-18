@@ -8,6 +8,7 @@ local uci = require "uci"
 local M = {}
 local DEFAULT_ADDRESS = "192.168.100.1"
 local DISH_PORT = 9201
+local UPDATE_SCRIPT = "/usr/libexec/starlink-monitor/install-update.sh"
 
 local function valid_ipv4(address)
     if type(address) ~= "string" or not address:match("^%d+%.%d+%.%d+%.%d+$") then
@@ -45,6 +46,16 @@ local function response(address)
         default_address = DEFAULT_ADDRESS,
         port = DISH_PORT,
     }
+end
+
+local function valid_version(version)
+    if type(version) ~= "string" or not version:match("^%d+%.%d+%.%d+$") then
+        return false
+    end
+    for part in version:gmatch("%d+") do
+        if #part > 1 and part:sub(1, 1) == "0" then return false end
+    end
+    return true
 end
 
 --[[
@@ -100,6 +111,40 @@ function M.test_config(params)
     data.reachable = reachable
     if not reachable then data.err_msg = "dish_unreachable" end
     return data
+end
+
+--[[
+    @method-type: call
+    @method-name: install_update
+    @method-desc: Download, verify and install one newer Starlink Monitor release
+--]]
+function M.install_update(params)
+    local version = params and params.version
+    if not valid_version(version) then
+        return { err_code = 1, err_msg = "invalid_version" }
+    end
+
+    local pipe = io.popen(UPDATE_SCRIPT .. " " .. version .. " 2>/dev/null", "r")
+    if pipe == nil then
+        return { err_code = 2, err_msg = "update_runner_unavailable" }
+    end
+    local output = pipe:read("*a") or ""
+    pipe:close()
+
+    local installed_version, checksum = output:match("^ok|([0-9]+%.[0-9]+%.[0-9]+)|([0-9a-f]+)%s*$")
+    if installed_version and checksum and #checksum == 64 then
+        return {
+            updated = true,
+            version = installed_version,
+            checksum = checksum,
+        }
+    end
+
+    local error_name = output:match("^error|([a-z_]+)%s*$")
+    return {
+        err_code = 3,
+        err_msg = error_name or "update_failed",
+    }
 end
 
 return M

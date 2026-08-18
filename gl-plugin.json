@@ -62,5 +62,9 @@
       "/etc/config/starlink-monitor"
     ]
   },
+  "lifecycle": {
+    "postinst": "hooks/postinst",
+    "postrm": "hooks/postrm"
+  },
   "overlay": "overlay"
 }

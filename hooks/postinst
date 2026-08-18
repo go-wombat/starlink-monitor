@@ -1,0 +1,9 @@
+#!/bin/sh
+
+# The firmware's Lua RPC loader caches each object table inside nginx workers.
+# Reload once after an install/upgrade so newly added backend methods are visible.
+[ -n "${IPKG_INSTROOT:-}" ] && exit 0
+if [ -x /usr/sbin/nginx ] && [ -s /var/run/nginx.pid ]; then
+	/usr/sbin/nginx -s reload >/dev/null 2>&1 || true
+fi
+exit 0

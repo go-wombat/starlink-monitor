@@ -1,6 +1,6 @@
 {
   "name": "gl-plugin-starlink-monitor",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "private": true,
   "description": "GL.iNet admin panel plugin: Starlink Monitor",
   "keywords": [
@@ -28,7 +28,8 @@
     "deploy": "glplugin deploy",
     "dev": "glplugin dev",
     "router:install": "glplugin install",
-    "router:uninstall": "glplugin uninstall"
+    "router:uninstall": "glplugin uninstall",
+    "router:smoke": "node scripts/router-smoke.js"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.6.0"

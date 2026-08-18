@@ -24,15 +24,60 @@ test('package installs no background service, cron job, or persistent telemetry'
   ));
   const overlayFiles = filesBelow(path.join(projectRoot, 'overlay')).sort();
 
-  assert.equal(manifest.lifecycle, undefined);
+  assert.deepEqual(manifest.lifecycle, {
+    postinst: 'hooks/postinst',
+    postrm: 'hooks/postrm',
+  });
   assert.deepEqual(manifest.package.conffiles, ['/etc/config/starlink-monitor']);
   assert.deepEqual(overlayFiles, [
     path.join('etc', 'config', 'starlink-monitor'),
     path.join('usr', 'lib', 'oui-httpd', 'rpc', 'starlink-monitor'),
     path.join('usr', 'libexec', 'starlink-monitor', 'admin-session.sh'),
+    path.join('usr', 'libexec', 'starlink-monitor', 'install-update.sh'),
     path.join('usr', 'share', 'licenses', 'gl-sdk4-ui-starlink-monitor', 'THIRD_PARTY_NOTICES.md'),
     path.join('www', 'cgi-bin', 'gl-starlink-monitor'),
   ]);
+});
+
+test('package lifecycle only refreshes the firmware RPC cache', function() {
+  const postinst = fs.readFileSync(path.join(projectRoot, 'hooks', 'postinst'), 'utf8');
+  const postrm = fs.readFileSync(path.join(projectRoot, 'hooks', 'postrm'), 'utf8');
+
+  [postinst, postrm].forEach(function(hook) {
+    assert.match(hook, /\[ -n "\$\{IPKG_INSTROOT:-\}" \] && exit 0/);
+    assert.match(hook, /\/usr\/sbin\/nginx -s reload/);
+    assert.doesNotMatch(hook, /\b(?:start|stop|restart)\b|init\.d|crontab|daemon/i);
+  });
+});
+
+test('verified updates run only after an explicit authenticated RPC call', function() {
+  const updater = fs.readFileSync(
+    path.join(projectRoot, 'overlay', 'usr', 'libexec', 'starlink-monitor', 'install-update.sh'),
+    'utf8'
+  );
+  const rpc = fs.readFileSync(
+    path.join(projectRoot, 'overlay', 'usr', 'lib', 'oui-httpd', 'rpc', 'starlink-monitor'),
+    'utf8'
+  );
+  const tools = fs.readFileSync(path.join(projectRoot, 'src', 'tools.vue'), 'utf8');
+
+  assert.match(updater, /RELEASE_BASE_URL='https:\/\/github\.com\/go-wombat\/starlink-monitor\/releases\/download'/);
+  assert.match(updater, /--proto '=https'/);
+  assert.match(updater, /--proto-redir '=https'/);
+  assert.match(updater, /SHA256SUMS/);
+  assert.match(updater, /sha256sum "\$package_path"/);
+  assert.match(updater, /opkg compare-versions "\$version" '>>' "\$installed_version"/);
+  assert.match(updater, /opkg install "\$package_path"/);
+  assert.match(updater, /starlink-monitor-update\.lock/);
+  assert.doesNotMatch(updater, /crontab|init\.d|uci set|daemon/i);
+
+  assert.match(rpc, /function M\.install_update\(params\)/);
+  assert.match(rpc, /valid_version\(version\)/);
+  assert.match(rpc, /UPDATE_SCRIPT \.\. " " \.\. version/);
+  assert.match(tools, /window\.confirm\(/);
+  assert.match(tools, /safeRpc\('starlink-monitor', 'install_update'/);
+  const mountedBlock = tools.slice(tools.indexOf('  mounted()'), tools.indexOf('  beforeDestroy()'));
+  assert.doesNotMatch(mountedBlock, /checkForUpdates\(|installUpdate\(/);
 });
 
 test('router proxy requires an admin session, stays read-only, and uses tmpfs', function() {
