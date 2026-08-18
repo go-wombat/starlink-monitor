@@ -1,5 +1,7 @@
 # Starlink Monitor
 
+[![CI](https://github.com/go-wombat/starlink-monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/go-wombat/starlink-monitor/actions/workflows/ci.yml)
+
 Native GL.iNet SDK4 dashboard for a Starlink dish. The local endpoint defaults
 to `192.168.100.1:9201` and its IPv4 address can be changed from Tools.
 
@@ -55,6 +57,10 @@ npm run package
 The generated OpenWrt package is written to `dist/`. Install it with
 `npm run router:install` after configuring the router connection used by the
 SDK CLI.
+
+Published `.ipk` packages and their `SHA256SUMS` file are available from
+[GitHub Releases](https://github.com/go-wombat/starlink-monitor/releases). Each
+`v*` tag is rebuilt, tested, packaged, checksummed, and published automatically.
 
 The full-stack package depends on OpenWrt's `curl`, `gl-oui-rpc`, `ubus`,
 `jsonfilter`, and `uci` packages. Its router-side CGI is a fixed read-only proxy
